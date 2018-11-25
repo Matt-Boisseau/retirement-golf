@@ -296,11 +296,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   launchAngle: 12
-  initialVelocity: 50
+  initialVelocity: 60
   pointTimeInterval: 0.01
-  tickIntervalDistance: 0
+  tickIntervalDistance: 10
   drawTimeout: 1
-  runInRealTime: 0
+  runInRealTime: 1
 --- !u!4 &1791881358
 Transform:
   m_ObjectHideFlags: 0

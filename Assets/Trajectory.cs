@@ -5,14 +5,17 @@ using System.Linq;
 
 public class Trajectory : MonoBehaviour {
 
+	// fields
 	public float launchAngle, initialVelocity, pointTimeInterval, tickIntervalDistance, drawTimeout;
 	public bool runInRealTime;
 
+	// variables
 	private float	ballMass = 0.04593f,
 					ballProjectedSurfaceArea = 0.0014f,
 					ballDragCoefficient = 0.2f,
 					environmentGravity = 9.81f,
 					environmentAirDensity = 1.225f;
+	private List<Vector2> points = new List<Vector2>();
 
 	private void Start() {
 
@@ -20,6 +23,7 @@ public class Trajectory : MonoBehaviour {
 		StartCoroutine(evaluateTrajectory());
 	}
 
+	// hyperbolic cosine, needed for y(t) calculation
 	private float Cosh(float n) {
 		return (Mathf.Exp(n) + Mathf.Exp(-n)) / 2;
 	}
@@ -37,39 +41,50 @@ public class Trajectory : MonoBehaviour {
 
 		// lots of stupid math that I don't actually understand
 		float n = (Mathf.PI/180)*a;
-		float k = (1/2)*p*A*C;
-		k = 0.000175175f;
-		float _b = (m/(2*k))*(Mathf.Log((((k*(Mathf.Pow(v,2)))/(m*g))*(Mathf.Pow(Mathf.Sin(n),2)))+1));
+		float k = (p*A*C)/2;
 		float xAtPeak = Mathf.Sqrt(m/(g*k))*Mathf.Atan(v * Mathf.Sin(n) * Mathf.Sqrt(k/m*g));
 
-		// calculate y values
+		// chunks used in y(t) calculation
+		float _b = (m/(2*k))*(Mathf.Log((((k*(Mathf.Pow(v,2)))/(m*g))*(Mathf.Pow(Mathf.Sin(n),2)))+1));
+		float _c = Mathf.Atan(v*Mathf.Sin(n)*Mathf.Sqrt(k/(m*g)));
+		float _d = Mathf.Sqrt((g*k)/m);
+
+		// clear points dictionary
+		points = new List<Vector2>();
+
+		// set first point to (0, 0) because of course it is
+		points.Add(Vector2.zero);
+
+		// calculate positions (x,y) as a function of time (t)
 		float t = 0;
-		List<Vector2> points = new List<Vector2>();
 		while(true) {
 
-			// more stupid math that I don't understand
-			//float e = 2.7182818284590f; // Euler's number
-			//float t = (m/(k*v*Mathf.Cos(n)))*((Mathf.Pow(e,(k*x/m)))-1);
+			// increment time
+			t += pointTimeInterval;
+
+			// x(t)
 			float x = (Mathf.Log(((t*v*k*Mathf.Cos(n))/m)+1)*m)/k;
-			float _a = (t*Mathf.Sqrt((g*k)/m))-(Mathf.Atan(v*Mathf.Sin(n)*Mathf.Sqrt(k/(m*g))));
 
-			// y(t) for rising
-			if(x < xAtPeak) {
-				points.Add(new Vector2(x, ((m/k) * Mathf.Log(Mathf.Cos(_a))) + _b));
+			// y(t)
+			float y;
+			if(x < xAtPeak) { //rising
+				y = ((m/k)*Mathf.Log(Mathf.Cos((t*_d)-_c)))+_b;
+			}
+			else { //falling
+				y = (-(m/k)*Mathf.Log(Cosh((t*_d)-_c)))+_b;
 			}
 
-			// y(t) for falling
-			else {
-				points.Add(new Vector2(x, (-(m/k) * Mathf.Log(Cosh(_a))) + _b));
-			}
+			// add (x,y) to points list
+			Vector2 newPoint = new Vector2(x, y);
+			points.Add(newPoint);
 
 			// break when landing
 			// (right now it lands at y=0)
-			if(points[points.Count - 1].y < transform.position.y) {
+			if(newPoint.y < transform.position.y) {
 				break;
 			}
 
-			t += pointTimeInterval;
+			// render, then calculate next point
 			renderTrajectory(points);
 			if(runInRealTime) {
 				yield return new WaitForSeconds(pointTimeInterval);
@@ -89,40 +104,30 @@ public class Trajectory : MonoBehaviour {
 		int tickX = tickIntervalDistance;
 		bool peaked = false;
 
+		// iterate over every lien segment
+		// (starting at 1 because 0->1 is the first segment)
 		for(int i = 1; i < points.Count; i++) {
 
+			// get the two points for this line segment
+			Vector2 thisPoint = points[i];
+			Vector2 prevPoint = points[i - 1];
+
 			// draw line between every point
-			Vector3 a = new Vector3(
-				points[i].x,
-				points[i].y,
-				0
-			);
-			Vector3 b = new Vector3(
-				points[i - 1].x,
-				points[i - 1].y,
-				0
-			);
+			Vector3 a = new Vector3(thisPoint.x, thisPoint.y, 0);
+			Vector3 b = new Vector3(prevPoint.x, prevPoint.y, 0);
 			Debug.DrawLine(b, a, Color.white, drawTimeout);
 
 			// draw tick every tickIntervalDistance meters
-			if(points[i].x > tickX) {
+			if(thisPoint.x > tickX) {
 				tickX += tickIntervalDistance;
-				Vector3 c = new Vector3(
-					points[i - 1].x,
-					0,
-					0
-				);
+				Vector3 c = new Vector3(prevPoint.x, 0, 0);
 				Debug.DrawLine(b, c, Color.gray, drawTimeout);
 			}
 
 			// draw one line to indicate peak height
-			if(peaked == false && points[i].y < points[i - 1].y) {
+			if(peaked == false && thisPoint.y < prevPoint.y) {
 				peaked = true;
-				Vector3 c = new Vector3(
-					points[i - 1].x,
-					0,
-					0
-				);
+				Vector3 c = new Vector3(prevPoint.x, 0, 0);
 				Debug.DrawLine(b, c, Color.white, drawTimeout);
 			}
 		}
