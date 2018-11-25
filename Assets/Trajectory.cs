@@ -5,14 +5,8 @@ using System.Linq;
 
 public class Trajectory : MonoBehaviour {
 
-	private float _launchAngle;
-	[SerializeField]
-	public float LaunchAngle {
-		get { return _launchAngle; }
-		set { _launchAngle = value; }
-	}
-
-	public float initialVelocity, updateTimeInterval, updateXInterval, displayTimeInterval;
+	public float launchAngle, initialVelocity, pointTimeInterval, tickIntervalDistance, drawTimeout;
+	public bool runInRealTime;
 
 	private float	ballMass = 0.04593f,
 					ballProjectedSurfaceArea = 0.0014f,
@@ -30,14 +24,10 @@ public class Trajectory : MonoBehaviour {
 		return (Mathf.Exp(n) + Mathf.Exp(-n)) / 2;
 	}
 
-	private float ACosh(float n) {
-		return Mathf.Log(n + Mathf.Sqrt(n * n - 1));
-	}
-
 	private IEnumerator evaluateTrajectory() {
 
 		// map properties to letters for compressed math
-		float	a = LaunchAngle,
+		float	a = launchAngle,
 				v = initialVelocity,
 				m = ballMass,
 				A = ballProjectedSurfaceArea,
@@ -53,13 +43,14 @@ public class Trajectory : MonoBehaviour {
 		float xAtPeak = Mathf.Sqrt(m/(g*k))*Mathf.Atan(v * Mathf.Sin(n) * Mathf.Sqrt(k/m*g));
 
 		// calculate y values
-		float x = 0;
+		float t = 0;
 		List<Vector2> points = new List<Vector2>();
 		while(true) {
 
 			// more stupid math that I don't understand
-			float e = 2.7182818284590f; // Euler's number
-			float t = (m/(k*v*Mathf.Cos(n)))*((Mathf.Pow(e,(k*x/m)))-1);
+			//float e = 2.7182818284590f; // Euler's number
+			//float t = (m/(k*v*Mathf.Cos(n)))*((Mathf.Pow(e,(k*x/m)))-1);
+			float x = (Mathf.Log(((t*v*k*Mathf.Cos(n))/m)+1)*m)/k;
 			float _a = (t*Mathf.Sqrt((g*k)/m))-(Mathf.Atan(v*Mathf.Sin(n)*Mathf.Sqrt(k/(m*g))));
 
 			// y(t) for rising
@@ -78,22 +69,24 @@ public class Trajectory : MonoBehaviour {
 				break;
 			}
 
-			x += updateXInterval;
+			t += pointTimeInterval;
 			renderTrajectory(points);
-			yield return new WaitForSeconds(updateTimeInterval);
+			if(runInRealTime) {
+				yield return new WaitForSeconds(pointTimeInterval);
+			}
 		}
 
 		// keep rendering, even after it's done calculating
 		while(true) {
 			renderTrajectory(points);
-			yield return new WaitForSeconds(displayTimeInterval);
+			yield return new WaitForSeconds(drawTimeout);
 		}
 	}
 
 	private void renderTrajectory(List<Vector2> points) {
 
-		int xTickInterval = 10;
-		int xTick = xTickInterval;
+		int tickIntervalDistance = 10; // in meters
+		int tickX = tickIntervalDistance;
 		bool peaked = false;
 
 		for(int i = 1; i < points.Count; i++) {
@@ -109,17 +102,17 @@ public class Trajectory : MonoBehaviour {
 				points[i - 1].y,
 				0
 			);
-			Debug.DrawLine(b, a, Color.white, displayTimeInterval);
+			Debug.DrawLine(b, a, Color.white, drawTimeout);
 
-			// draw tick every xTickInterval meters
-			if(points[i].x > xTick) {
-				xTick += xTickInterval;
+			// draw tick every tickIntervalDistance meters
+			if(points[i].x > tickX) {
+				tickX += tickIntervalDistance;
 				Vector3 c = new Vector3(
 					points[i - 1].x,
 					0,
 					0
 				);
-				Debug.DrawLine(b, c, Color.gray, displayTimeInterval);
+				Debug.DrawLine(b, c, Color.gray, drawTimeout);
 			}
 
 			// draw one line to indicate peak height
@@ -130,7 +123,7 @@ public class Trajectory : MonoBehaviour {
 					0,
 					0
 				);
-				Debug.DrawLine(b, c, Color.white, displayTimeInterval);
+				Debug.DrawLine(b, c, Color.white, drawTimeout);
 			}
 		}
 	}
